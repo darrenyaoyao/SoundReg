@@ -2,13 +2,12 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import librosa
+import time
 from pathlib import Path
 import panns_inference
 from models import Cnn6
-from panns_inference import AudioTagging, SoundEventDetection, labels
+from panns_inference.inference import AudioTagging, SoundEventDetection, labels
 
-checkpoint_path = '{}/panns_data/Cnn6_mAP=0.343.pth'.format(str(Path.home()))
-model = Cnn6(sample_rate=32000, window_size=1024, hop_size=320, mel_bins=64, fmin=50, fmax=14000, classes_num=len(labels))
 
 
 def print_audio_tagging_result(clipwise_output):
@@ -54,27 +53,27 @@ def plot_sound_event_detection_result(framewise_output):
 
 
 if __name__ == '__main__':
+
+    print(time.time())
+    checkpoint_path = '{}/panns_data/Cnn6_mAP=0.343.pth'.format(str(Path.home()))
+    model = Cnn6(sample_rate=32000, window_size=1024, hop_size=320, mel_bins=64, fmin=50, fmax=14000, classes_num=len(labels))
+
+    print(time.time())
     """Example of using panns_inferece for audio tagging and sound evetn detection.
     """
     device = 'cpu' # 'cuda' | 'cpu'
     audio_path = 'resources/R9_ZSCveAHg_7s.wav'
     (audio, _) = librosa.core.load(audio_path, sr=32000, mono=True)
-    audio = audio[None, :]  # (batch_size, segment_samples)
+    audio = audio[None, 0:32000]  # (batch_size, segment_samples)
+    print(time.time())
 
     print('------ Audio tagging ------')
-    at = AudioTagging(model=model, checkpoint_path=checkpoint_path, device=device)
+    at = AudioTagging(model=model, checkpoint_path=checkpoint_path, device=device, data=audio)
+    print(time.time())
     (clipwise_output, embedding) = at.inference(audio)
     """clipwise_output: (batch_size, classes_num), embedding: (batch_size, embedding_size)"""
 
-    print_audio_tagging_result(clipwise_output[0])
+    print(embedding.shape)
+    print(time.time())
 
-    print('------ Sound event detection ------')
-    sed = SoundEventDetection(
-        checkpoint_path=None, 
-        device=device, 
-        interpolate_mode='nearest', # 'nearest'
-    )
-    framewise_output = sed.inference(audio)
-    """(batch_size, time_steps, classes_num)"""
 
-    plot_sound_event_detection_result(framewise_output[0])

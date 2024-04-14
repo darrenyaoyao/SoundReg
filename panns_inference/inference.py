@@ -4,7 +4,11 @@ import argparse
 import librosa
 import matplotlib.pyplot as plt
 import torch
+import torch.quantization
 from pathlib import Path
+from torch.ao.quantization import get_default_qconfig_mapping
+from torch.ao.quantization.quantize_fx import convert_fx, prepare_fx
+from torch.ao.quantization.fx.custom_config import PrepareCustomConfig
 
 from .pytorch_utils import move_data_to_device
 from .models import Cnn14, Cnn14_DecisionLevelMax
@@ -24,14 +28,14 @@ def get_filename(path):
 
 
 class AudioTagging(object):
-    def __init__(self, model=None, checkpoint_path=None, device='cuda'):
+    def __init__(self, model=None, checkpoint_path=None, device='cuda', data=None):
         """Audio tagging inference wrapper.
         """
         if not checkpoint_path:
             checkpoint_path='{}/panns_data/Cnn14_mAP=0.431.pth'.format(str(Path.home()))
         print('Checkpoint path: {}'.format(checkpoint_path))
         
-        if not os.path.exists(checkpoint_path) or os.path.getsize(checkpoint_path) < 3e8:
+        if not os.path.exists(checkpoint_path):
             create_folder(os.path.dirname(checkpoint_path))
             zenodo_path = 'https://zenodo.org/record/3987831/files/Cnn14_mAP%3D0.431.pth?download=1'
             os.system('wget -O "{}" "{}"'.format(checkpoint_path, zenodo_path))
@@ -55,6 +59,7 @@ class AudioTagging(object):
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'])
 
+
         # Parallel
         if 'cuda' in str(self.device):
             self.model.to(self.device)
@@ -63,11 +68,21 @@ class AudioTagging(object):
         else:
             print('Using CPU.')
 
+        self.model.eval()
+        prep_config_dict = PrepareCustomConfig().set_non_traceable_module_names(["spectrogram_extractor", "logmel_extractor"])
+        qconfig_mapping = get_default_qconfig_mapping('qnnpack')
+        self.model = prepare_fx(self.model, qconfig_mapping, example_inputs=data, prepare_custom_config=prep_config_dict)
+
+        data = move_data_to_device(data, self.device)
+        self.model(data)
+        self.model = convert_fx(self.model)
+
+
+
     def inference(self, audio):
         audio = move_data_to_device(audio, self.device)
 
         with torch.no_grad():
-            self.model.eval()
             output_dict = self.model(audio, None)
 
         clipwise_output = output_dict['clipwise_output'].data.cpu().numpy()
@@ -122,14 +137,18 @@ class SoundEventDetection(object):
             print('Using CPU.')
 
     def inference(self, audio):
+        print("Start")
         audio = move_data_to_device(audio, self.device)
+        print("End Move data")
 
         with torch.no_grad():
             self.model.eval()
+            print("Feed input")
             output_dict = self.model(
                 input=audio, 
                 mixup_lambda=None
             )
+            print("Finish")
 
         framewise_output = output_dict['framewise_output'].data.cpu().numpy()
 
