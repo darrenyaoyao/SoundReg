@@ -85,10 +85,11 @@ class AudioTagging(object):
         with torch.no_grad():
             output_dict = self.model(audio, None)
 
-        clipwise_output = output_dict['clipwise_output'].data.cpu().numpy()
+        logmel = output_dict['logmel'].data.cpu().numpy()
         embedding = output_dict['embedding'].data.cpu().numpy()
+        spectrogram = output_dict['spectrogram'].data.cpu().numpy()
 
-        return clipwise_output, embedding
+        return logmel, embedding, spectrogram
 
 
 class SoundEventDetection(object):

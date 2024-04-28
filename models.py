@@ -527,10 +527,10 @@ class Cnn10(nn.Module):
         """
         Input: (batch_size, data_length)"""
 
-        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
-        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+        spectrogram = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        logmel = self.logmel_extractor(spectrogram)    # (batch_size, 1, time_steps, mel_bins)
         
-        x = x.transpose(1, 3)
+        x = logmel.transpose(1, 3)
         x = self.bn0(x)
         x = x.transpose(1, 3)
         
@@ -557,9 +557,9 @@ class Cnn10(nn.Module):
         x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)
-        clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        # clipwise_output = torch.sigmoid(self.fc_audioset(x))
         
-        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+        output_dict = {'logmel': logmel, 'embedding': embedding, 'spectrogram': spectrogram}
 
         return output_dict
 
